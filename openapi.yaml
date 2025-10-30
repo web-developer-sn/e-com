@@ -1,0 +1,1887 @@
+openapi: 3.0.3
+info:
+  title: E-commerce API
+  description: |
+    Complete e-commerce REST API with authentication, product management, cart, orders, and payment integration.
+    
+    ## Features
+    - JWT-based authentication for admins and customers
+    - Product catalog with brands, categories, and multi-store inventory
+    - Location-aware store search using Haversine formula
+    - Shopping cart management
+    - Order processing with Razorpay payment integration
+    - File upload with Cloudinary integration
+    - Comprehensive validation and error handling
+    
+    ## Authentication
+    Most endpoints require authentication via JWT token in the Authorization header:
+    ```
+    Authorization: Bearer <your-jwt-token>
+    ```
+  version: 1.0.0
+  contact:
+    name: API Support
+    email: support@example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:3000/api
+    description: Development server
+  - url: https://api.example.com/api
+    description: Production server
+
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    # Common schemas
+    Error:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [error]
+        message:
+          type: string
+        errors:
+          type: string
+      required:
+        - status
+        - message
+
+    Success:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [success]
+        message:
+          type: string
+        data:
+          type: object
+      required:
+        - status
+
+    PaginationMeta:
+      type: object
+      properties:
+        page:
+          type: integer
+          minimum: 1
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 100
+        total:
+          type: integer
+          minimum: 0
+        totalPages:
+          type: integer
+          minimum: 0
+        hasNextPage:
+          type: boolean
+        hasPrevPage:
+          type: boolean
+
+    # User schemas
+    User:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [admin, superadmin]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Customer:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+          nullable: true
+        phone:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CustomerAddress:
+      type: object
+      properties:
+        id:
+          type: integer
+        customer_id:
+          type: integer
+        label:
+          type: string
+        address_line1:
+          type: string
+        address_line2:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        country:
+          type: string
+        postal_code:
+          type: string
+        latitude:
+          type: number
+          format: float
+        longitude:
+          type: number
+          format: float
+        is_default:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    # Product schemas
+    Brand:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        account_id:
+          type: integer
+          nullable: true
+        created_by:
+          type: integer
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Category:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        account_id:
+          type: integer
+          nullable: true
+        parent_id:
+          type: integer
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    Product:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        sku:
+          type: string
+          nullable: true
+        description:
+          type: string
+        price:
+          type: number
+          format: decimal
+        status:
+          type: string
+          enum: [active, inactive]
+        brand_id:
+          type: integer
+        account_id:
+          type: integer
+          nullable: true
+        created_by:
+          type: integer
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        brand_name:
+          type: string
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/Category'
+        images:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductImage'
+        stores:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductStore'
+
+    ProductImage:
+      type: object
+      properties:
+        id:
+          type: integer
+        product_id:
+          type: integer
+        url:
+          type: string
+          format: uri
+        public_id:
+          type: string
+        is_primary:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    Store:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        code:
+          type: string
+        contact_phone:
+          type: string
+        address_line1:
+          type: string
+        address_line2:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        country:
+          type: string
+        postal_code:
+          type: string
+        latitude:
+          type: number
+          format: float
+        longitude:
+          type: number
+          format: float
+        account_id:
+          type: integer
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        distance_km:
+          type: number
+          format: float
+          description: Distance in kilometers (only in nearby stores response)
+
+    ProductStore:
+      type: object
+      properties:
+        id:
+          type: integer
+        product_id:
+          type: integer
+        store_id:
+          type: integer
+        stock:
+          type: integer
+        price:
+          type: number
+          format: decimal
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    # Cart schemas
+    Cart:
+      type: object
+      properties:
+        id:
+          type: integer
+        customer_id:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/CartItem'
+        summary:
+          $ref: '#/components/schemas/CartSummary'
+
+    CartItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        cart_id:
+          type: integer
+        product_id:
+          type: integer
+        store_id:
+          type: integer
+        quantity:
+          type: integer
+        price_snapshot:
+          type: number
+          format: decimal
+        product_name:
+          type: string
+        product_sku:
+          type: string
+        brand_name:
+          type: string
+        store_name:
+          type: string
+        available_stock:
+          type: integer
+        current_price:
+          type: number
+          format: decimal
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CartSummary:
+      type: object
+      properties:
+        total_items:
+          type: integer
+        subtotal:
+          type: number
+          format: decimal
+        currency:
+          type: string
+
+    # Order schemas
+    Order:
+      type: object
+      properties:
+        id:
+          type: integer
+        order_number:
+          type: string
+        customer_id:
+          type: integer
+        shipping_address_id:
+          type: integer
+        status:
+          type: string
+          enum: [CREATED, PAYMENT_PENDING, PAID, PROCESSING, SHIPPED, DELIVERED, CANCELLED, FAILED]
+        subtotal:
+          type: number
+          format: decimal
+        tax_amount:
+          type: number
+          format: decimal
+        shipping_amount:
+          type: number
+          format: decimal
+        discount_amount:
+          type: number
+          format: decimal
+        total_amount:
+          type: number
+          format: decimal
+        currency:
+          type: string
+        razorpay_order_id:
+          type: string
+          nullable: true
+        razorpay_payment_id:
+          type: string
+          nullable: true
+        payment_completed_at:
+          type: string
+          format: date-time
+          nullable: true
+        notes:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrderItem'
+        shipping_address:
+          $ref: '#/components/schemas/CustomerAddress'
+
+    OrderItem:
+      type: object
+      properties:
+        id:
+          type: integer
+        order_id:
+          type: integer
+        product_id:
+          type: integer
+        store_id:
+          type: integer
+        product_name:
+          type: string
+        product_sku:
+          type: string
+        quantity:
+          type: integer
+        unit_price:
+          type: number
+          format: decimal
+        total_price:
+          type: number
+          format: decimal
+        created_at:
+          type: string
+          format: date-time
+
+    # Payment schemas
+    PaymentInitiation:
+      type: object
+      properties:
+        order:
+          $ref: '#/components/schemas/Order'
+        razorpay_key_id:
+          type: string
+        razorpay_order_id:
+          type: string
+        amount:
+          type: integer
+          description: Amount in paise
+        currency:
+          type: string
+
+    # Contact schemas
+    ContactSubmission:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+          nullable: true
+        company:
+          type: string
+          nullable: true
+        subject:
+          type: string
+        message:
+          type: string
+        status:
+          type: string
+          enum: [new, in_progress, resolved, closed]
+        ip_address:
+          type: string
+          nullable: true
+        user_agent:
+          type: string
+          nullable: true
+        updated_by:
+          type: integer
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+paths:
+  # Health check
+  /health:
+    get:
+      tags:
+        - Health
+      summary: Health check endpoint
+      security: []
+      responses:
+        '200':
+          description: Server is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                  message:
+                    type: string
+                  timestamp:
+                    type: string
+                  environment:
+                    type: string
+
+  # Authentication endpoints
+  /admin/register:
+    post:
+      tags:
+        - Authentication
+      summary: Register admin user
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 2
+                  maxLength: 200
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  minLength: 6
+                  maxLength: 128
+                role:
+                  type: string
+                  enum: [admin, superadmin]
+                  default: admin
+              required:
+                - name
+                - email
+                - password
+      responses:
+        '201':
+          description: Admin registered successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          user:
+                            $ref: '#/components/schemas/User'
+                          token:
+                            type: string
+        '400':
+          description: Validation error or user already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /admin/login:
+    post:
+      tags:
+        - Authentication
+      summary: Admin login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+              required:
+                - email
+                - password
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          user:
+                            $ref: '#/components/schemas/User'
+                          token:
+                            type: string
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /customers/register:
+    post:
+      tags:
+        - Authentication
+      summary: Register customer
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 2
+                  maxLength: 255
+                email:
+                  type: string
+                  format: email
+                  nullable: true
+                phone:
+                  type: string
+                  pattern: '^\+?[1-9]\d{1,14}$'
+                  nullable: true
+                password:
+                  type: string
+                  minLength: 6
+                  maxLength: 128
+                address:
+                  type: object
+                  properties:
+                    label:
+                      type: string
+                      maxLength: 100
+                      default: Home
+                    address_line1:
+                      type: string
+                      maxLength: 255
+                    address_line2:
+                      type: string
+                      maxLength: 255
+                    city:
+                      type: string
+                      maxLength: 100
+                    state:
+                      type: string
+                      maxLength: 100
+                    country:
+                      type: string
+                      maxLength: 100
+                    postal_code:
+                      type: string
+                      maxLength: 20
+                    latitude:
+                      type: number
+                      minimum: -90
+                      maximum: 90
+                    longitude:
+                      type: number
+                      minimum: -180
+                      maximum: 180
+                  required:
+                    - address_line1
+                    - city
+                    - state
+                    - country
+                    - postal_code
+                    - latitude
+                    - longitude
+              required:
+                - name
+                - password
+                - address
+              anyOf:
+                - required: [email]
+                - required: [phone]
+      responses:
+        '201':
+          description: Customer registered successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          customer:
+                            $ref: '#/components/schemas/Customer'
+                          token:
+                            type: string
+
+  /customers/login:
+    post:
+      tags:
+        - Authentication
+      summary: Customer login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                identifier:
+                  type: string
+                  description: Email or phone number
+                password:
+                  type: string
+              required:
+                - identifier
+                - password
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          customer:
+                            $ref: '#/components/schemas/Customer'
+                          token:
+                            type: string
+
+  /customers/me:
+    get:
+      tags:
+        - Authentication
+      summary: Get customer profile
+      responses:
+        '200':
+          description: Customer profile
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        allOf:
+                          - $ref: '#/components/schemas/Customer'
+                          - type: object
+                            properties:
+                              addresses:
+                                type: array
+                                items:
+                                  $ref: '#/components/schemas/CustomerAddress'
+
+  # Product endpoints
+  /products:
+    get:
+      tags:
+        - Products
+      summary: Get products with filtering and pagination
+      security: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: sort
+          in: query
+          schema:
+            type: string
+            pattern: '^[a-zA-Z_]+:(asc|desc)$'
+            default: 'created_at:desc'
+        - name: q
+          in: query
+          description: Search query
+          schema:
+            type: string
+        - name: brand_id
+          in: query
+          schema:
+            type: integer
+        - name: category_id
+          in: query
+          schema:
+            type: integer
+        - name: store_id
+          in: query
+          schema:
+            type: integer
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [active, inactive]
+        - name: min_price
+          in: query
+          schema:
+            type: number
+            minimum: 0
+        - name: max_price
+          in: query
+          schema:
+            type: number
+            minimum: 0
+        - name: account_id
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Products retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [success]
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Product'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+
+    post:
+      tags:
+        - Products
+      summary: Create product
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 255
+                sku:
+                  type: string
+                  maxLength: 100
+                description:
+                  type: string
+                price:
+                  type: number
+                  minimum: 0
+                status:
+                  type: string
+                  enum: [active, inactive]
+                  default: active
+                brand_id:
+                  type: integer
+                account_id:
+                  type: integer
+                category_ids:
+                  type: array
+                  items:
+                    type: integer
+                  minItems: 1
+                store_assignments:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      store_id:
+                        type: integer
+                      stock:
+                        type: integer
+                        minimum: 0
+                        default: 0
+                      price:
+                        type: number
+                        minimum: 0
+                    required:
+                      - store_id
+              required:
+                - name
+                - price
+                - brand_id
+                - category_ids
+      responses:
+        '201':
+          description: Product created successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Product'
+
+  /products/{id}:
+    get:
+      tags:
+        - Products
+      summary: Get product by ID
+      security: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Product retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Product'
+        '404':
+          description: Product not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+    put:
+      tags:
+        - Products
+      summary: Update product
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 1
+                  maxLength: 255
+                sku:
+                  type: string
+                  maxLength: 100
+                description:
+                  type: string
+                price:
+                  type: number
+                  minimum: 0
+                status:
+                  type: string
+                  enum: [active, inactive]
+                brand_id:
+                  type: integer
+                category_ids:
+                  type: array
+                  items:
+                    type: integer
+                  minItems: 1
+      responses:
+        '200':
+          description: Product updated successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Product'
+
+    delete:
+      tags:
+        - Products
+      summary: Delete product
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Product deleted successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Success'
+
+  # Store endpoints
+  /stores:
+    get:
+      tags:
+        - Stores
+      summary: Get stores with pagination
+      security: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: account_id
+          in: query
+          schema:
+            type: integer
+        - name: city
+          in: query
+          schema:
+            type: string
+        - name: state
+          in: query
+          schema:
+            type: string
+        - name: country
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Stores retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [success]
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Store'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+
+  /stores/nearby:
+    get:
+      tags:
+        - Stores
+      summary: Get nearby stores using Haversine formula
+      security: []
+      parameters:
+        - name: lat
+          in: query
+          required: true
+          description: Latitude
+          schema:
+            type: number
+            minimum: -90
+            maximum: 90
+        - name: lng
+          in: query
+          required: true
+          description: Longitude
+          schema:
+            type: number
+            minimum: -180
+            maximum: 180
+        - name: radius
+          in: query
+          description: Search radius in kilometers
+          schema:
+            type: number
+            minimum: 0.1
+            maximum: 100
+            default: 5
+        - name: account_id
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Nearby stores retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [success]
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Store'
+                  meta:
+                    type: object
+                    properties:
+                      total:
+                        type: integer
+                      radius:
+                        type: number
+                      center:
+                        type: object
+                        properties:
+                          lat:
+                            type: number
+                          lng:
+                            type: number
+
+  # Cart endpoints
+  /cart:
+    get:
+      tags:
+        - Cart
+      summary: Get cart with items
+      responses:
+        '200':
+          description: Cart retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Cart'
+
+    delete:
+      tags:
+        - Cart
+      summary: Clear entire cart
+      responses:
+        '200':
+          description: Cart cleared successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Success'
+
+  /cart/items:
+    post:
+      tags:
+        - Cart
+      summary: Add item to cart
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                product_id:
+                  type: integer
+                store_id:
+                  type: integer
+                quantity:
+                  type: integer
+                  minimum: 1
+                  maximum: 100
+                  default: 1
+              required:
+                - product_id
+                - store_id
+      responses:
+        '201':
+          description: Item added to cart
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/CartItem'
+
+  /cart/items/{itemId}:
+    put:
+      tags:
+        - Cart
+      summary: Update cart item quantity
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                quantity:
+                  type: integer
+                  minimum: 0
+                  maximum: 100
+              required:
+                - quantity
+      responses:
+        '200':
+          description: Cart item updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/CartItem'
+
+    delete:
+      tags:
+        - Cart
+      summary: Remove item from cart
+      parameters:
+        - name: itemId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Item removed from cart
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Success'
+
+  /cart/validate:
+    get:
+      tags:
+        - Cart
+      summary: Validate cart for checkout
+      responses:
+        '200':
+          description: Cart validation result
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          valid:
+                            type: boolean
+                          issues:
+                            type: array
+                            items:
+                              type: string
+                          cart_summary:
+                            $ref: '#/components/schemas/CartSummary'
+
+  # Order endpoints
+  /orders:
+    get:
+      tags:
+        - Orders
+      summary: Get customer orders
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [CREATED, PAYMENT_PENDING, PAID, PROCESSING, SHIPPED, DELIVERED, CANCELLED, FAILED]
+        - name: from_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to_date
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Orders retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [success]
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Order'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+
+    post:
+      tags:
+        - Orders
+      summary: Create order from cart
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                shipping_address_id:
+                  type: integer
+                notes:
+                  type: string
+                  maxLength: 500
+              required:
+                - shipping_address_id
+      responses:
+        '201':
+          description: Order created successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Order'
+
+  /orders/{id}:
+    get:
+      tags:
+        - Orders
+      summary: Get order by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Order retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Order'
+
+  /orders/{id}/payment:
+    post:
+      tags:
+        - Orders
+      summary: Initiate payment for order
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Payment initiated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/PaymentInitiation'
+
+  /orders/{id}/payment/verify:
+    post:
+      tags:
+        - Orders
+      summary: Verify payment
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                razorpay_payment_id:
+                  type: string
+                razorpay_signature:
+                  type: string
+              required:
+                - razorpay_payment_id
+                - razorpay_signature
+      responses:
+        '200':
+          description: Payment verified successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Order'
+
+  /orders/{id}/cancel:
+    post:
+      tags:
+        - Orders
+      summary: Cancel order
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+                  maxLength: 255
+      responses:
+        '200':
+          description: Order cancelled successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/Order'
+
+  # Upload endpoints
+  /uploads/single:
+    post:
+      tags:
+        - Uploads
+      summary: Upload single image
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                image:
+                  type: string
+                  format: binary
+                folder:
+                  type: string
+                  default: general
+                transformation:
+                  type: string
+                  description: JSON string of transformation options
+              required:
+                - image
+      responses:
+        '200':
+          description: File uploaded successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          url:
+                            type: string
+                            format: uri
+                          public_id:
+                            type: string
+                          width:
+                            type: integer
+                          height:
+                            type: integer
+                          format:
+                            type: string
+                          bytes:
+                            type: integer
+
+  # Contact endpoints
+  /contact:
+    post:
+      tags:
+        - Contact
+      summary: Submit contact form
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  minLength: 2
+                  maxLength: 255
+                email:
+                  type: string
+                  format: email
+                phone:
+                  type: string
+                  pattern: '^\+?[1-9]\d{1,14}$'
+                company:
+                  type: string
+                  maxLength: 255
+                subject:
+                  type: string
+                  minLength: 5
+                  maxLength: 500
+                message:
+                  type: string
+                  minLength: 10
+                  maxLength: 5000
+              required:
+                - name
+                - email
+                - subject
+                - message
+      responses:
+        '201':
+          description: Contact form submitted successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          id:
+                            type: integer
+                          email_sent:
+                            type: boolean
+        '400':
+          description: Validation error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '429':
+          description: Too many requests
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /contact/admin/submissions:
+    get:
+      tags:
+        - Contact
+      summary: Get contact form submissions (Admin only)
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [new, in_progress, resolved, closed]
+        - name: from_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: search
+          in: query
+          schema:
+            type: string
+            maxLength: 255
+      responses:
+        '200':
+          description: Contact submissions retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [success]
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ContactSubmission'
+                  meta:
+                    $ref: '#/components/schemas/PaginationMeta'
+
+  /contact/admin/submissions/{id}:
+    get:
+      tags:
+        - Contact
+      summary: Get contact submission by ID (Admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Contact submission retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ContactSubmission'
+
+  /contact/admin/submissions/{id}/status:
+    patch:
+      tags:
+        - Contact
+      summary: Update contact submission status (Admin only)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                status:
+                  type: string
+                  enum: [new, in_progress, resolved, closed]
+              required:
+                - status
+      responses:
+        '200':
+          description: Status updated successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ContactSubmission'
+
+  /contact/admin/stats:
+    get:
+      tags:
+        - Contact
+      summary: Get contact form statistics (Admin only)
+      parameters:
+        - name: from_date
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: to_date
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Statistics retrieved successfully
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/Success'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          total_submissions:
+                            type: integer
+                          status_breakdown:
+                            type: object
+                            additionalProperties:
+                              type: integer
+                          daily_submissions:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                date:
+                                  type: string
+                                  format: date
+                                count:
+                                  type: integer
+
+  # Webhook endpoints
+  /webhooks/razorpay:
+    post:
+      tags:
+        - Webhooks
+      summary: Razorpay webhook endpoint
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Razorpay webhook payload
+      responses:
+        '200':
+          description: Webhook processed successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Success'
+        '400':
+          description: Invalid signature or payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+tags:
+  - name: Health
+    description: Health check endpoints
+  - name: Authentication
+    description: User and customer authentication
+  - name: Products
+    description: Product management
+  - name: Stores
+    description: Store management and location services
+  - name: Cart
+    description: Shopping cart management
+  - name: Orders
+    description: Order processing and management
+  - name: Uploads
+    description: File upload services
+  - name: Contact
+    description: Contact form and customer support
+  - name: Webhooks
+    description: External service webhooks

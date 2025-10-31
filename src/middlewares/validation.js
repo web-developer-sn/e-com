@@ -6,6 +6,7 @@ const validate = (schema, property = 'body') => {
       abortEarly: false,
       allowUnknown: false,
       stripUnknown: true
+      
     });
     
     if (error) {
